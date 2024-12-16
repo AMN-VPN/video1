@@ -86,24 +86,25 @@ function setupConnection(conn) {
     connections.push(conn);
     
     conn.on('open', async () => {
-        console.log('Connection opened with:', conn.peer);
+        console.log('اتصال برقرار شد:', conn.peer);
         await syncExistingMessages(conn);
     });
 
-    const videoCall = new VideoCall();
+    window.videoCall = new VideoCall(conn); // ارسال اتصال به کلاس VideoCall
 
     conn.on('data', async (data) => {
+        console.log('دریافت داده:', data.type);
         if (data.type === 'video-offer') {
-            await videoCall.handleVideoOffer(data.offer, conn);
+            await window.videoCall.handleVideoOffer(data.offer, conn);
         } 
         else if (data.type === 'video-answer') {
-            await videoCall.handleVideoAnswer(data.answer);
+            await window.videoCall.handleVideoAnswer(data.answer);
         }
         else if (data.type === 'ice-candidate') {
-            await videoCall.handleIceCandidate(data.candidate);
+            await window.videoCall.handleIceCandidate(data.candidate);
         }
         else if (data.type === 'end-call') {
-            videoCall.endCall();
+            window.videoCall.endCall();
         }
         else if (data.type === 'audio') {
             const audioBlob = new Blob([data.audioData], { type: 'audio/webm' });
@@ -118,8 +119,7 @@ function setupConnection(conn) {
             );
         }
     });
-}
-async function syncExistingMessages(conn) {
+}async function syncExistingMessages(conn) {
     const voices = await db.voices
         .where('roomCode')
         .equals(currentRoom)
