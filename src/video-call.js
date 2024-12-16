@@ -1,8 +1,8 @@
 class VideoCall {
     constructor() {
         this.localStream = null;
-        this.remoteStream = null;
         this.peerConnection = null;
+        this.currentConnection = null;
     }
 
     initializeButtons() {
@@ -15,121 +15,109 @@ class VideoCall {
 
     async startCall() {
         try {
-            this.localStream = await navigator.mediaDevices.getUserMedia({ 
-                video: true, 
-                audio: true 
+            this.localStream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: true
             });
-            
-            document.getElementById('localVideo').srcObject = this.localStream;
+
+            const localVideo = document.getElementById('localVideo');
+            localVideo.srcObject = this.localStream;
             document.getElementById('videoContainer').style.display = 'flex';
-            
-            this.peerConnection = new RTCPeerConnection({
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            });
+            document.getElementById('startVideoCall').style.display = 'none';
+            document.getElementById('endVideoCall').style.display = 'block';
 
-            // اضافه کردن مسیریاب‌های ICE
-            this.peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    connections.forEach(conn => {
-                        conn.send({
-                            type: 'ice-candidate',
-                            candidate: event.candidate
-                        });
-                    });
-                }
-            };
-
-            // نمایش استریم دریافتی
-            this.peerConnection.ontrack = (event) => {
-                document.getElementById('remoteVideo').srcObject = event.streams[0];
-            };
-
-            // اضافه کردن تراک‌های محلی
-            this.localStream.getTracks().forEach(track => {
-                this.peerConnection.addTrack(track, this.localStream);
-            });
+            this.initializePeerConnection();
 
             const offer = await this.peerConnection.createOffer();
             await this.peerConnection.setLocalDescription(offer);
 
             connections.forEach(conn => {
-                conn.send({
-                    type: 'video-offer',
-                    offer: offer
-                });
+                if (conn.open) {
+                    this.currentConnection = conn;
+                    conn.send({
+                        type: 'video-offer',
+                        offer: this.peerConnection.localDescription
+                    });
+                }
             });
 
         } catch (error) {
-            console.error('خطا در شروع تماس:', error);
+            console.log('خطا در شروع تماس:', error);
         }
+    }
+
+    initializePeerConnection() {
+        this.peerConnection = new RTCPeerConnection({
+            iceServers: CONFIG.STUN_SERVERS
+        });
+
+        this.localStream.getTracks().forEach(track => {
+            this.peerConnection.addTrack(track, this.localStream);
+        });
+
+        this.peerConnection.onicecandidate = (event) => {
+            if (event.candidate && this.currentConnection) {
+                this.currentConnection.send({
+                    type: 'ice-candidate',
+                    candidate: event.candidate
+                });
+            }
+        };
+
+        this.peerConnection.ontrack = (event) => {
+            const remoteVideo = document.getElementById('remoteVideo');
+            if (remoteVideo.srcObject !== event.streams[0]) {
+                remoteVideo.srcObject = event.streams[0];
+            }
+        };
     }
 
     async handleVideoOffer(offer, conn) {
         try {
-            this.localStream = await navigator.mediaDevices.getUserMedia({ 
-                video: true, 
-                audio: true 
+            // اول چک می‌کنیم که آیا دوربین در دسترس هست
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const hasCamera = devices.some(device => device.kind === 'videoinput');
+            const hasAudio = devices.some(device => device.kind === 'audioinput');
+
+            this.localStream = await navigator.mediaDevices.getUserMedia({
+                video: hasCamera ? {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: "user"
+                } : false,
+                audio: hasAudio
             });
-            
-            document.getElementById('localVideo').srcObject = this.localStream;
+
+            const localVideo = document.getElementById('localVideo');
+            localVideo.srcObject = this.localStream;
             document.getElementById('videoContainer').style.display = 'flex';
 
-            this.peerConnection = new RTCPeerConnection({
-                iceServers: [
-                    { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
-                ]
-            });
-
-            this.peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    conn.send({
-                        type: 'ice-candidate',
-                        candidate: event.candidate
-                    });
-                }
-            };
-
-            this.peerConnection.ontrack = (event) => {
-                document.getElementById('remoteVideo').srcObject = event.streams[0];
-            };
-
-            this.localStream.getTracks().forEach(track => {
-                this.peerConnection.addTrack(track, this.localStream);
-            });
-
+            this.initializePeerConnection();
             await this.peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
             const answer = await this.peerConnection.createAnswer();
             await this.peerConnection.setLocalDescription(answer);
 
             conn.send({
                 type: 'video-answer',
-                answer: answer
+                answer: this.peerConnection.localDescription
             });
 
         } catch (error) {
-            console.error('خطا در پاسخ به تماس:', error);
+            console.log('وضعیت دوربین و میکروفون را بررسی کنید');
+            alert('لطفا دسترسی به دوربین و میکروفون را در مرورگر خود فعال کنید');
         }
     }
-
     async handleVideoAnswer(answer) {
-        try {
-            await this.peerConnection.setRemoteDescription(answer)
-        } catch (error) {
-            console.error('خطا در دریافت پاسخ تماس:', error)
-        }
+        await this.peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
     }
 
     async handleIceCandidate(candidate) {
-        try {
-            if (this.peerConnection) {
+        if (this.peerConnection) {
+            try {
                 await this.peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (error) {
+                console.log('خطا در افزودن ICE candidate:', error);
             }
-        } catch (error) {
-            console.error('خطا در افزودن ICE candidate:', error);
         }
     }
 
@@ -140,19 +128,15 @@ class VideoCall {
         if (this.peerConnection) {
             this.peerConnection.close();
         }
-
+        
         document.getElementById('videoContainer').style.display = 'none';
         document.getElementById('startVideoCall').style.display = 'block';
         document.getElementById('endVideoCall').style.display = 'none';
 
-        connections.forEach(conn => {
-            if (conn.open) {
-                conn.send({
-                    type: 'end-call'
-                });
-            }
-        });
+        if (this.currentConnection) {
+            this.currentConnection.send({ type: 'end-call' });
+        }
     }
 }
-// ساخت یک نمونه گلوبال
-window.videoCall = new VideoCall();const videoCall = new VideoCall();
+
+window.videoCall = new VideoCall();
