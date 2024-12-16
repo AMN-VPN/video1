@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>اتاق چت | Globgram</title>
+    <script src="https://unpkg.com/dexie@latest/dist/dexie.js"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script src="src/voice-manager.js"></script>
+    <script src="src/room-manager.js"></script>
+    <script src="src/chat-room.js"></script>
+    <script src="src/video-call.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head><body>
+    <div class="chat-container">
+        <div class="chat-header">
+            <h2>اتاق شماره: <span id="roomCodeDisplay"></span></h2>
+            <div class="online-users" id="onlineUsers"></div>
+        </div>
+        <div class="chat-messages" id="recordings"></div>
+        <div class="chat-controls">
+            <button id="startVideoCall">شروع تماس تصویری</button>
+            <button id="endVideoCall" style="display:none">پایان تماس</button>
+            <!-- دکمه‌های قبلی -->
+            <button id="recordButton">شروع ضبط</button>
+            <button id="stopButton" disabled>توقف ضبط</button>
+            <button id="leaveRoom">خروج از اتاق</button>
+        </div>
+
+        <!-- اضافه کردن container برای ویدیو -->
+        <div id="videoContainer" style="display:none">
+            <video id="localVideo" autoplay muted></video>
+            <video id="remoteVideo" autoplay></video>
+        </div>
+    </div>
+</body></html>
